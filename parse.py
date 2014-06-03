@@ -1,4 +1,4 @@
-import liblex
+import sprdpl.lex
 
 class Context:
     def __init__(self, fn_table, tokenizer):
@@ -168,6 +168,7 @@ rule_tokens = {
     'WHITESPACE': ' ',
 }
 skip = {'WHITESPACE'}
+rule_lexer = sprdpl.lex.Lexer(rule_tokens, skip)
 
 # Utility functions
 
@@ -179,7 +180,6 @@ def rule_fn(rule_table, rule, prod):
 
 class Parser:
     def __init__(self, rule_table, start):
-        self.tokenizer = liblex.Tokenizer(rule_tokens, skip)
         self.fn_table = {}
         for [rule, *prods] in rule_table:
             for prod in prods:
@@ -190,7 +190,7 @@ class Parser:
         self.start = start
 
     def create_rule(self, rule, prod, fn):
-        prod = parse_rule_expr(rule, self.tokenizer.input(prod))
+        prod = parse_rule_expr(rule, rule_lexer.input(prod))
         prod = FnWrapper(rule, prod, fn) if fn else prod
         if rule not in self.fn_table:
             self.fn_table[rule] = Alt(rule, [])

@@ -23,7 +23,7 @@ class Token:
     def __str__(self):
         return 'Token(%s, "%s", info=%s)' % (self.type, self.value, self.info)
 
-class Tokenizer:
+class Lexer:
     def __init__(self, token_list, skip):
         self.token_fns = {}
         # If the token list is actually a dict, sort by longest regex first
@@ -54,9 +54,9 @@ class Tokenizer:
                 tokens.append(token)
             lineno += value.count('\n')
             match = self.matcher(text, match.end())
-        return TokenizerContext(tokens)
+        return LexerContext(tokens)
 
-class TokenizerContext:
+class LexerContext:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
