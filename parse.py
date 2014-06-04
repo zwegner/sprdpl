@@ -11,9 +11,6 @@ class ParseResult:
     def get_info(self, n):
         return self.info[n]
 
-# Dummy sentinel object
-BAD_PARSE = object()
-
 class Context:
     def __init__(self, fn_table, tokenizer):
         self.fn_table = fn_table
@@ -30,12 +27,12 @@ class Identifier:
         if self.name in ctx.fn_table:
             return ctx.fn_table[self.name].parse(ctx)
         elif ctx.tokenizer.peek() is None:
-            return BAD_PARSE
+            return None
         # XXX check token name validity
         elif ctx.tokenizer.peek().type == self.name:
             t = ctx.tokenizer.next()
             return (t.value, t.info)
-        return BAD_PARSE
+        return None
     def __str__(self):
         return '"%s"' % self.name
 
@@ -47,12 +44,12 @@ class Repeat:
     def parse(self, ctx):
         results = []
         item = self.item.parse(ctx)
-        while item is not BAD_PARSE:
+        while item:
             results.append(item)
             item = self.item.parse(ctx)
         if len(results) >= self.min:
             return ([item[0] for item in results], None)
-        return BAD_PARSE
+        return None
     def __str__(self):
         return 'rep(%s)' % self.item
 
@@ -65,9 +62,9 @@ class Sequence:
         pos = ctx.tokenizer.pos
         for item in self.items:
             r = item.parse(ctx)
-            if r is BAD_PARSE:
+            if not r:
                 ctx.tokenizer.pos = pos
-                return BAD_PARSE
+                return None
             items.append(r)
         return [[item[i] for item in items] for i in range(2)]
     def __str__(self):
@@ -80,9 +77,9 @@ class Alternation:
     def parse(self, ctx):
         for item in self.items:
             r = item.parse(ctx)
-            if r is not BAD_PARSE:
+            if r:
                 return r
-        return BAD_PARSE
+        return None
     def __str__(self):
         return 'alt(%s)' % ','.join(map(str, self.items))
 
@@ -92,7 +89,7 @@ class Optional:
         self.item = item
     def parse(self, ctx):
         result = self.item.parse(ctx)
-        return (None, None) if result is BAD_PARSE else result
+        return (None, None) if not result else result
     def __str__(self):
         return 'opt(%s)' % self.item
 
@@ -108,10 +105,10 @@ class FnWrapper:
         self.fn = fn
     def parse(self, ctx):
         result = self.prod.parse(ctx)
-        if result is not BAD_PARSE:
+        if result:
             result, info = result
             return (self.fn(ParseResult(result, info)), None)
-        return BAD_PARSE
+        return None
     def __str__(self):
         return str(self.prod)
 
@@ -202,7 +199,7 @@ class Parser:
     def parse(self, tokenizer):
         prod = self.fn_table[self.start]
         result = prod.parse(Context(self.fn_table, tokenizer))
-        if result is BAD_PARSE:
+        if not result:
             raise RuntimeError('bad parse near token %s' % tokenizer.peek())
         elif tokenizer.peek() is not None:
             raise RuntimeError('parser did not consume entire input, near token %s' %
