@@ -1,11 +1,7 @@
 import sprdpl.lex
 
-class Context:
-    def __init__(self, fn_table, tokenizer):
-        self.fn_table = fn_table
-        self.tokenizer = tokenizer
-        self.check_prods = set()
-
+# ParseResult works like a tuple for the results of parsed rules, but with an
+# additional .get_info(n) method for getting line-number information out
 class ParseResult:
     def __init__(self, items, info):
         self.items = items
@@ -13,16 +9,21 @@ class ParseResult:
     def __getitem__(self, n):
         return self.items[n]
     def get_info(self, n):
-        if self.info:
-            return self.info[n]
-        return None
+        return self.info[n]
 
 # Dummy sentinel object
 BAD_PARSE = object()
 
-# Classes to represent grammar structure
+class Context:
+    def __init__(self, fn_table, tokenizer):
+        self.fn_table = fn_table
+        self.tokenizer = tokenizer
 
-class String:
+# Classes to represent grammar structure. These are hierarchically nested, and
+# operate through the parse method, usually calling other rules' parse methods.
+
+# Parse either a token or a nonterminal of the grammar
+class Identifier:
     def __init__(self, rule, name):
         self.rule = rule
         self.name = name
@@ -31,6 +32,7 @@ class String:
             return ctx.fn_table[self.name].parse(ctx)
         elif ctx.tokenizer.peek() is None:
             return BAD_PARSE
+        # XXX check token name validity
         elif ctx.tokenizer.peek().type == self.name:
             t = ctx.tokenizer.next()
             return (t.value, t.info)
@@ -38,6 +40,7 @@ class String:
     def __str__(self):
         return '"%s"' % self.name
 
+# Parse a rule repeated at least <min> number of times (used for * and + in EBNF)
 class Repeat:
     def __init__(self, rule, item, min=0):
         self.rule = rule
@@ -55,7 +58,8 @@ class Repeat:
     def __str__(self):
         return 'rep(%s)' % self.item
 
-class Seq:
+# Parse a sequence of multiple consecutive rules
+class Sequence:
     def __init__(self, rule, items):
         self.rule = rule
         self.items = items
@@ -72,7 +76,8 @@ class Seq:
     def __str__(self):
         return 'seq(%s)' % ','.join(map(str, self.items))
 
-class Alt:
+# Parse one of a choice of multiple rules
+class Alternation:
     def __init__(self, rule, items):
         self.rule = rule
         self.items = items
@@ -85,7 +90,8 @@ class Alt:
     def __str__(self):
         return 'alt(%s)' % ','.join(map(str, self.items))
 
-class Opt:
+# Either parse a rule or not
+class Optional:
     def __init__(self, rule, item):
         self.rule = rule
         self.item = item
@@ -95,10 +101,14 @@ class Opt:
     def __str__(self):
         return 'opt(%s)' % self.item
 
+# Parse a rule, and then call a user-defined function on the result
 class FnWrapper:
     def __init__(self, rule, prod, fn):
-        if not isinstance(prod, Seq):
-            prod = Seq(rule, [prod])
+        # Make sure top-level rules are a sequence. When we pass parse results
+        # to the user-defined function, it must be returned in an array, so we
+        # can use the ParserResults class and have access to the parse info
+        if not isinstance(prod, Sequence):
+            prod = Sequence(rule, [prod])
         self.rule = rule
         self.prod = prod
         self.fn = fn
@@ -126,12 +136,12 @@ def parse_rule_atom(rule, tokenizer):
         tokenizer.expect('RPAREN')
         r = parse_repeat(rule, tokenizer, r)
     elif tokenizer.accept('LBRACKET'):
-        r = Opt(rule, parse_rule_expr(rule, tokenizer))
+        r = Optional(rule, parse_rule_expr(rule, tokenizer))
         tokenizer.expect('RBRACKET')
     else:
         t = tokenizer.accept('IDENT')
         if t:
-            r = parse_repeat(rule, tokenizer, String(rule, t.value))
+            r = parse_repeat(rule, tokenizer, Identifier(rule, t.value))
         else:
             raise RuntimeError('bad token: %s' % tokenizer.peek())
     return r
@@ -143,7 +153,7 @@ def parse_rule_seq(rule, tokenizer):
         r.append(parse_rule_atom(rule, tokenizer))
         tok = tokenizer.peek()
     if len(r) > 1:
-        return Seq(rule, r)
+        return Sequence(rule, r)
     return r[0] if r else None
 
 def parse_rule_expr(rule, tokenizer):
@@ -151,7 +161,7 @@ def parse_rule_expr(rule, tokenizer):
     while tokenizer.accept('PIPE'):
         r.append(parse_rule_seq(rule, tokenizer))
     if len(r) > 1:
-        return Alt(rule, r)
+        return Alternation(rule, r)
     return r[0]
 
 # ...And a mini lexer too
@@ -170,8 +180,7 @@ rule_tokens = {
 skip = {'WHITESPACE'}
 rule_lexer = sprdpl.lex.Lexer(rule_tokens, skip)
 
-# Utility functions
-
+# Decorator to add a function to a table of rules. Just because 'lambda' sucks.
 def rule_fn(rule_table, rule, prod):
     def wrapper(fn):
         rule_table.append((rule, (prod, fn)))
@@ -193,7 +202,7 @@ class Parser:
         prod = parse_rule_expr(rule, rule_lexer.input(prod))
         prod = FnWrapper(rule, prod, fn) if fn else prod
         if rule not in self.fn_table:
-            self.fn_table[rule] = Alt(rule, [])
+            self.fn_table[rule] = Alternation(rule, [])
         self.fn_table[rule].items.append(prod)
 
     def parse(self, tokenizer):
