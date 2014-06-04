@@ -26,12 +26,10 @@ class Identifier:
     def parse(self, ctx):
         if self.name in ctx.fn_table:
             return ctx.fn_table[self.name].parse(ctx)
-        elif ctx.tokenizer.peek() is None:
-            return None
         # XXX check token name validity
-        elif ctx.tokenizer.peek().type == self.name:
-            t = ctx.tokenizer.next()
-            return (t.value, t.info)
+        token = ctx.tokenizer.accept(self.name)
+        if token:
+            return (token.value, token.info)
         return None
     def __str__(self):
         return '"%s"' % self.name
@@ -58,15 +56,15 @@ class Sequence:
     def __init__(self, items):
         self.items = items
     def parse(self, ctx):
-        items = []
+        results = []
         pos = ctx.tokenizer.pos
         for item in self.items:
-            r = item.parse(ctx)
-            if not r:
+            result = item.parse(ctx)
+            if not result:
                 ctx.tokenizer.pos = pos
                 return None
-            items.append(r)
-        return [[item[i] for item in items] for i in range(2)]
+            results.append(result)
+        return [[r[i] for r in results] for i in range(2)]
     def __str__(self):
         return 'seq(%s)' % ','.join(map(str, self.items))
 
@@ -76,9 +74,9 @@ class Alternation:
         self.items = items
     def parse(self, ctx):
         for item in self.items:
-            r = item.parse(ctx)
-            if r:
-                return r
+            result = item.parse(ctx)
+            if result:
+                return result
         return None
     def __str__(self):
         return 'alt(%s)' % ','.join(map(str, self.items))
@@ -114,6 +112,8 @@ class FnWrapper:
 
 # Mini parser for our grammar specification language (basically EBNF)
 
+# After either a parenthesized group or an identifier, we accept * and + for
+# repeating the aforementioned item (either zero or more times, or one or more)
 def parse_repeat(tokenizer, repeated):
     if tokenizer.accept('STAR'):
         return Repeat(repeated)
@@ -122,43 +122,49 @@ def parse_repeat(tokenizer, repeated):
     return repeated
 
 def parse_rule_atom(tokenizer):
+    # Parenthesized rules: just used for grouping
     if tokenizer.accept('LPAREN'):
-        r = parse_rule_expr(tokenizer)
+        result = parse_rule_expr(tokenizer)
         tokenizer.expect('RPAREN')
-        r = parse_repeat(tokenizer, r)
+        result = parse_repeat(tokenizer, result)
+    # Bracketed rules are entirely optional
     elif tokenizer.accept('LBRACKET'):
-        r = Optional(parse_rule_expr(tokenizer))
+        result = Optional(parse_rule_expr(tokenizer))
         tokenizer.expect('RBRACKET')
+    # Otherwise, it must be a regular identifier
     else:
-        t = tokenizer.accept('IDENT')
-        if t:
-            r = parse_repeat(tokenizer, Identifier(t.value))
-        else:
-            raise RuntimeError('bad token: %s' % tokenizer.peek())
-    return r
+        token = tokenizer.expect('IDENTIFIER')
+        result = parse_repeat(tokenizer, Identifier(token.value))
+    return result
 
+# Parse the concatenation of one or more expressions
 def parse_rule_seq(tokenizer):
-    r = []
-    tok = tokenizer.peek()
-    while tok and tok.type != 'RBRACKET' and tok.type != 'RPAREN' and tok.type != 'PIPE':
-        r.append(parse_rule_atom(tokenizer))
-        tok = tokenizer.peek()
-    if len(r) > 1:
-        return Sequence(r)
-    return r[0] if r else None
+    items = []
+    token = tokenizer.peek()
+    while (token and token.type != 'RBRACKET' and token.type != 'RPAREN' and
+            token.type != 'PIPE'):
+        items.append(parse_rule_atom(tokenizer))
+        token = tokenizer.peek()
+    # Only return a sequence if there's multiple items, otherwise there's way
+    # too many [0]s when extracting parsed items in complicated rules
+    if len(items) > 1:
+        return Sequence(items)
+    return items[0] if items else None
 
+# Top-level parser, parse any number of sequences, joined by the alternation
+# operator, |
 def parse_rule_expr(tokenizer):
-    r = [parse_rule_seq(tokenizer)]
+    items = [parse_rule_seq(tokenizer)]
     while tokenizer.accept('PIPE'):
-        r.append(parse_rule_seq(tokenizer))
-    if len(r) > 1:
-        return Alternation(r)
-    return r[0]
+        items.append(parse_rule_seq(tokenizer))
+    if len(items) > 1:
+        return Alternation(items)
+    return items[0]
 
 # ...And a mini lexer too
 
 rule_tokens = {
-    'IDENT': '[a-zA-Z_]+',
+    'IDENTIFIER': '[a-zA-Z_]+',
     'LBRACKET': '\[',
     'LPAREN': '\(',
     'PIPE': '\|',
