@@ -24,8 +24,7 @@ class Context:
 
 # Parse either a token or a nonterminal of the grammar
 class Identifier:
-    def __init__(self, rule, name):
-        self.rule = rule
+    def __init__(self, name):
         self.name = name
     def parse(self, ctx):
         if self.name in ctx.fn_table:
@@ -42,8 +41,7 @@ class Identifier:
 
 # Parse a rule repeated at least <min> number of times (used for * and + in EBNF)
 class Repeat:
-    def __init__(self, rule, item, min=0):
-        self.rule = rule
+    def __init__(self, item, min=0):
         self.item = item
         self.min = min
     def parse(self, ctx):
@@ -60,8 +58,7 @@ class Repeat:
 
 # Parse a sequence of multiple consecutive rules
 class Sequence:
-    def __init__(self, rule, items):
-        self.rule = rule
+    def __init__(self, items):
         self.items = items
     def parse(self, ctx):
         items = []
@@ -78,8 +75,7 @@ class Sequence:
 
 # Parse one of a choice of multiple rules
 class Alternation:
-    def __init__(self, rule, items):
-        self.rule = rule
+    def __init__(self, items):
         self.items = items
     def parse(self, ctx):
         for item in self.items:
@@ -92,8 +88,7 @@ class Alternation:
 
 # Either parse a rule or not
 class Optional:
-    def __init__(self, rule, item):
-        self.rule = rule
+    def __init__(self, item):
         self.item = item
     def parse(self, ctx):
         result = self.item.parse(ctx)
@@ -101,15 +96,14 @@ class Optional:
     def __str__(self):
         return 'opt(%s)' % self.item
 
-# Parse a rule, and then call a user-defined function on the result
+# Parse a and then call a user-defined function on the result
 class FnWrapper:
-    def __init__(self, rule, prod, fn):
+    def __init__(self, prod, fn):
         # Make sure top-level rules are a sequence. When we pass parse results
         # to the user-defined function, it must be returned in an array, so we
         # can use the ParserResults class and have access to the parse info
         if not isinstance(prod, Sequence):
-            prod = Sequence(rule, [prod])
-        self.rule = rule
+            prod = Sequence([prod])
         self.prod = prod
         self.fn = fn
     def parse(self, ctx):
@@ -123,45 +117,45 @@ class FnWrapper:
 
 # Mini parser for our grammar specification language (basically EBNF)
 
-def parse_repeat(rule, tokenizer, repeated):
+def parse_repeat(tokenizer, repeated):
     if tokenizer.accept('STAR'):
-        return Repeat(rule, repeated)
+        return Repeat(repeated)
     elif tokenizer.accept('PLUS'):
-        return Repeat(rule, repeated, min=1)
+        return Repeat(repeated, min=1)
     return repeated
 
-def parse_rule_atom(rule, tokenizer):
+def parse_rule_atom(tokenizer):
     if tokenizer.accept('LPAREN'):
-        r = parse_rule_expr(rule, tokenizer)
+        r = parse_rule_expr(tokenizer)
         tokenizer.expect('RPAREN')
-        r = parse_repeat(rule, tokenizer, r)
+        r = parse_repeat(tokenizer, r)
     elif tokenizer.accept('LBRACKET'):
-        r = Optional(rule, parse_rule_expr(rule, tokenizer))
+        r = Optional(parse_rule_expr(tokenizer))
         tokenizer.expect('RBRACKET')
     else:
         t = tokenizer.accept('IDENT')
         if t:
-            r = parse_repeat(rule, tokenizer, Identifier(rule, t.value))
+            r = parse_repeat(tokenizer, Identifier(t.value))
         else:
             raise RuntimeError('bad token: %s' % tokenizer.peek())
     return r
 
-def parse_rule_seq(rule, tokenizer):
+def parse_rule_seq(tokenizer):
     r = []
     tok = tokenizer.peek()
     while tok and tok.type != 'RBRACKET' and tok.type != 'RPAREN' and tok.type != 'PIPE':
-        r.append(parse_rule_atom(rule, tokenizer))
+        r.append(parse_rule_atom(tokenizer))
         tok = tokenizer.peek()
     if len(r) > 1:
-        return Sequence(rule, r)
+        return Sequence(r)
     return r[0] if r else None
 
-def parse_rule_expr(rule, tokenizer):
-    r = [parse_rule_seq(rule, tokenizer)]
+def parse_rule_expr(tokenizer):
+    r = [parse_rule_seq(tokenizer)]
     while tokenizer.accept('PIPE'):
-        r.append(parse_rule_seq(rule, tokenizer))
+        r.append(parse_rule_seq(tokenizer))
     if len(r) > 1:
-        return Alternation(rule, r)
+        return Alternation(r)
     return r[0]
 
 # ...And a mini lexer too
@@ -199,10 +193,10 @@ class Parser:
         self.start = start
 
     def create_rule(self, rule, prod, fn):
-        prod = parse_rule_expr(rule, rule_lexer.input(prod))
-        prod = FnWrapper(rule, prod, fn) if fn else prod
+        prod = parse_rule_expr(rule_lexer.input(prod))
+        prod = FnWrapper(prod, fn) if fn else prod
         if rule not in self.fn_table:
-            self.fn_table[rule] = Alternation(rule, [])
+            self.fn_table[rule] = Alternation([])
         self.fn_table[rule].items.append(prod)
 
     def parse(self, tokenizer):
