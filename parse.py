@@ -1,4 +1,4 @@
-import sprdpl.lex
+from . import lex
 
 # ParseResult works like a tuple for the results of parsed rules, but with an
 # additional .get_info(n) method for getting line-number information out
@@ -175,7 +175,7 @@ rule_tokens = {
     'WHITESPACE': ' ',
 }
 skip = {'WHITESPACE'}
-rule_lexer = sprdpl.lex.Lexer(rule_tokens, skip)
+rule_lexer = lex.Lexer(rule_tokens, skip)
 
 # Decorator to add a function to a table of rules. Just because 'lambda' sucks.
 def rule_fn(rule_table, rule, prod):
