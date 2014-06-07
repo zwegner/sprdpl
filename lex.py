@@ -24,7 +24,7 @@ class Token:
         return 'Token(%s, "%s", info=%s)' % (self.type, self.value, self.info)
 
 class Lexer:
-    def __init__(self, token_list, skip):
+    def __init__(self, token_list, skip=set()):
         self.token_fns = {}
         # If the token list is actually a dict, sort by longest regex first
         if isinstance(token_list, dict):
