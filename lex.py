@@ -39,7 +39,7 @@ class Lexer:
         self.matcher = re.compile(regex).match
         self.skip = skip
 
-    def input(self, text, filename=None):
+    def lex_input(self, text, filename):
         match = self.matcher(text)
         lineno = 1
         tokens = []
@@ -54,13 +54,15 @@ class Lexer:
                 tokens.append(token)
             lineno += value.count('\n')
             match = self.matcher(text, match.end())
-        return LexerContext(tokens)
+        return tokens
+
+    def input(self, text, filename=None):
+        return LexerContext(self.lex_input(text, filename))
 
 class LexerContext:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
-        self.saved_token = None
 
     def peek(self):
         if self.pos >= len(self.tokens):
@@ -78,6 +80,6 @@ class LexerContext:
         return None
 
     def expect(self, t):
-        if self.peek().type != t:
-            raise RuntimeError('got %s instead of %s' % (self.peek().type, t))
+        if not self.peek() or self.peek().type != t:
+            raise RuntimeError('got %s instead of %s' % (self.peek(), t))
         return self.next()
