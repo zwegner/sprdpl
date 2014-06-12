@@ -43,10 +43,10 @@ class Repeat:
         results = []
         item = self.item.parse(ctx)
         while item:
-            results.append(item)
+            results.append(item[0])
             item = self.item.parse(ctx)
         if len(results) >= self.min:
-            return ([item[0] for item in results], None)
+            return (results, None)
         return None
     def __str__(self):
         return 'rep(%s)' % self.item
@@ -87,7 +87,7 @@ class Optional:
         self.item = item
     def parse(self, ctx):
         result = self.item.parse(ctx)
-        return (None, None) if not result else result
+        return result or [None, None]
     def __str__(self):
         return 'opt(%s)' % self.item
 
@@ -164,15 +164,15 @@ def parse_rule_expr(tokenizer):
 # ...And a mini lexer too
 
 rule_tokens = {
-    'IDENTIFIER': '[a-zA-Z_]+',
-    'LBRACKET': '\[',
-    'LPAREN': '\(',
-    'PIPE': '\|',
-    'RBRACKET': '\]',
-    'RPAREN': '\)',
-    'STAR': '\*',
-    'PLUS': '\+',
-    'WHITESPACE': ' ',
+    'IDENTIFIER': r'[a-zA-Z_]+',
+    'LBRACKET':   r'\[',
+    'LPAREN':     r'\(',
+    'PIPE':       r'\|',
+    'RBRACKET':   r'\]',
+    'RPAREN':     r'\)',
+    'STAR':       r'\*',
+    'PLUS':       r'\+',
+    'WHITESPACE': r' ',
 }
 skip = {'WHITESPACE'}
 rule_lexer = lex.Lexer(rule_tokens, skip)
