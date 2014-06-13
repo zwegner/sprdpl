@@ -15,6 +15,7 @@ class Context:
     def __init__(self, fn_table, tokenizer):
         self.fn_table = fn_table
         self.tokenizer = tokenizer
+        self.max_pos = 0
 
 # Classes to represent grammar structure. These are hierarchically nested, and
 # operate through the parse method, usually calling other rules' parse methods.
@@ -61,6 +62,7 @@ class Sequence:
         for item in self.items:
             result = item.parse(ctx)
             if not result:
+                ctx.max_pos = max(ctx.max_pos, ctx.tokenizer.pos)
                 ctx.tokenizer.pos = pos
                 return None
             results.append(result)
@@ -204,10 +206,13 @@ class Parser:
 
     def parse(self, tokenizer):
         prod = self.fn_table[self.start]
-        result = prod.parse(Context(self.fn_table, tokenizer))
+        ctx = Context(self.fn_table, tokenizer)
+        result = prod.parse(ctx)
         if not result:
             raise RuntimeError('bad parse near token %s' % tokenizer.peek())
         elif tokenizer.peek() is not None:
+            # HACK
+            ctx.tokenizer.pos = ctx.max_pos
             raise RuntimeError('parser did not consume entire input, near token %s' %
                 tokenizer.peek())
         result, info = result
