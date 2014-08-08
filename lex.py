@@ -3,11 +3,14 @@ import re
 
 # Info means basically filename/line number, used for reporting errors
 class Info:
-    def __init__(self, filename, lineno):
+    def __init__(self, filename, lineno=1, textpos=0, column=0, length=0):
         self.filename = filename
         self.lineno = lineno
+        self.textpos = textpos
+        self.column = column
+        self.length = length
     def __str__(self):
-        return 'Info("%s", %s)' % (self.filename, self.lineno)
+        return 'Info("%s", %s, %s, %s)' % (self.filename, self.lineno, self.column, self.length)
 
 class Token:
     def __init__(self, type, value, info=None):
@@ -42,18 +45,22 @@ class Lexer:
     def lex_input(self, text, filename):
         match = self.matcher(text)
         lineno = 1
+        last_newline = 0
         tokens = []
         while match is not None:
             type = match.lastgroup
             value = match.group(type)
+            start, end = match.start(), match.end()
             if type not in self.skip:
                 token = Token(type, value)
                 if type in self.token_fns:
                     token = self.token_fns[type](token)
-                token.info = Info(filename, lineno)
+                token.info = Info(filename, lineno, start, start - last_newline, end - start)
                 tokens.append(token)
-            lineno += value.count('\n')
-            match = self.matcher(text, match.end())
+            if '\n' in value:
+                lineno += value.count('\n')
+                last_newline = end - value.rfind('\n')
+            match = self.matcher(text, end)
         return tokens
 
     def input(self, text, filename=None):
