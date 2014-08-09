@@ -64,12 +64,21 @@ class Lexer:
         return tokens
 
     def input(self, text, filename=None):
-        return LexerContext(self.lex_input(text, filename))
+        return LexerContext(text, self.lex_input(text, filename))
 
 class LexerContext:
-    def __init__(self, tokens):
+    def __init__(self, text, tokens):
+        self.text = text
         self.tokens = tokens
         self.pos = 0
+
+    def get_source_line(self, info):
+        start = self.text.rfind('\n', 0, info.textpos) + 1
+        end = self.text.find('\n', info.textpos)
+        return self.text[start:end]
+
+    def get_current_line(self):
+        return self.get_source_line(self.peek().info)
 
     def peek(self):
         if self.pos >= len(self.tokens):
