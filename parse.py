@@ -1,4 +1,32 @@
+import copy
+import sys
+
 from . import lex
+
+class ParseError(SyntaxError):
+    def __init__(self, msg, info=None):
+        self.msg = msg
+        self.info = info
+
+def merge_info_list(info):
+    first = last = info
+    while isinstance(first, list):
+        for item in first:
+            if item:
+                first = item
+                break
+        else:
+            return None
+    while isinstance(last, list):
+        for i in reversed(last):
+            if i:
+                last = i
+                break
+        else:
+            return first
+    info = copy.copy(first)
+    info.length = last.length + (last.textpos - first.textpos)
+    return info
 
 # ParseResult works like a tuple for the results of parsed rules, but with an
 # additional .get_info(n) method for getting line-number information out
@@ -8,14 +36,23 @@ class ParseResult:
         self.info = info
     def __getitem__(self, n):
         return self.items[n]
-    def get_info(self, n):
-        return self.info[n]
+    def get_info(self, *indices, merge=True):
+        info = self.info
+        for index in indices:
+            info = info[index]
+        if isinstance(info, list) and merge:
+            info = merge_info_list(info)
+        return info
+    def error(self, msg, *indices):
+        raise ParseError(msg, self.get_info(*indices))
 
 class Context:
     def __init__(self, fn_table, tokenizer):
         self.fn_table = fn_table
         self.tokenizer = tokenizer
-        self.max_pos = 0
+
+def unzip(results):
+    return [[r[i] for r in results] for i in range(2)]
 
 # Classes to represent grammar structure. These are hierarchically nested, and
 # operate through the parse method, usually calling other rules' parse methods.
@@ -44,10 +81,10 @@ class Repeat:
         results = []
         item = self.item.parse(ctx)
         while item:
-            results.append(item[0])
+            results.append(item)
             item = self.item.parse(ctx)
         if len(results) >= self.min:
-            return (results, None)
+            return unzip(results)
         return None
     def __str__(self):
         return 'rep(%s)' % self.item
@@ -62,11 +99,10 @@ class Sequence:
         for item in self.items:
             result = item.parse(ctx)
             if not result:
-                ctx.max_pos = max(ctx.max_pos, ctx.tokenizer.pos)
                 ctx.tokenizer.pos = pos
                 return None
             results.append(result)
-        return [[r[i] for r in results] for i in range(2)]
+        return unzip(results)
     def __str__(self):
         return 'seq(%s)' % ','.join(map(str, self.items))
 
@@ -88,8 +124,7 @@ class Optional:
     def __init__(self, item):
         self.item = item
     def parse(self, ctx):
-        result = self.item.parse(ctx)
-        return result or [None, None]
+        return self.item.parse(ctx) or (None, None)
     def __str__(self):
         return 'opt(%s)' % self.item
 
@@ -98,7 +133,7 @@ class FnWrapper:
     def __init__(self, prod, fn):
         # Make sure top-level rules are a sequence. When we pass parse results
         # to the user-defined function, it must be returned in an array, so we
-        # can use the ParserResults class and have access to the parse info
+        # can use the ParseResult class and have access to the parse info
         if not isinstance(prod, Sequence):
             prod = Sequence([prod])
         self.prod = prod
@@ -107,7 +142,12 @@ class FnWrapper:
         result = self.prod.parse(ctx)
         if result:
             result, info = result
-            return (self.fn(ParseResult(result, info)), None)
+            result = self.fn(ParseResult(result, info))
+            if isinstance(result, ParseResult):
+                result, info = result.items, result.info
+            else:
+                info = merge_info_list(info)
+            return (result, info)
         return None
     def __str__(self):
         return str(self.prod)
@@ -179,6 +219,13 @@ rule_tokens = {
 skip = {'WHITESPACE'}
 rule_lexer = lex.Lexer(rule_tokens, skip)
 
+def error(tokenizer, msg, info=None):
+    info = info or tokenizer.peek().info
+    print('%s(%s): parse error: %s' % (info.filename, info.lineno, msg), file=sys.stderr)
+    print(tokenizer.get_current_line(), file=sys.stderr)
+    print(' ' * info.column + '^' * info.length, file=sys.stderr)
+    sys.exit(1)
+
 # Decorator to add a function to a table of rules. Just because 'lambda' sucks.
 def rule_fn(rule_table, rule, prod):
     def wrapper(fn):
@@ -207,13 +254,14 @@ class Parser:
     def parse(self, tokenizer):
         prod = self.fn_table[self.start]
         ctx = Context(self.fn_table, tokenizer)
-        result = prod.parse(ctx)
+        try:
+            result = prod.parse(ctx)
+        except ParseError as e:
+            error(tokenizer, e.msg, info=e.info)
+        token = tokenizer.get_max_token()
         if not result:
-            raise RuntimeError('bad parse near token %s' % tokenizer.peek())
-        elif tokenizer.peek() is not None:
-            # HACK
-            ctx.tokenizer.pos = ctx.max_pos
-            raise RuntimeError('parser did not consume entire input, near token %s' %
-                tokenizer.peek())
+            error(tokenizer, 'bad parse')
+        elif token is not None:
+            error(tokenizer, 'parser did not consume entire input')
         result, info = result
         return result
