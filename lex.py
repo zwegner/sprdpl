@@ -71,6 +71,7 @@ class LexerContext:
         self.text = text
         self.tokens = tokens
         self.pos = 0
+        self.max_pos = 0
 
     def get_source_line(self, info):
         start = self.text.rfind('\n', 0, info.textpos) + 1
@@ -80,14 +81,25 @@ class LexerContext:
     def get_current_line(self):
         return self.get_source_line(self.peek().info)
 
-    def peek(self):
-        if self.pos >= len(self.tokens):
+    def set_pos(self, pos):
+        self.pos = pos
+        self.max_pos = max(self.max_pos, pos)
+
+    def token_at(self, pos):
+        if pos >= len(self.tokens):
             return None
-        return self.tokens[self.pos]
+        return self.tokens[pos]
+
+    def peek(self):
+        return self.token_at(self.pos)
+
+    def get_max_token(self):
+        return self.tokens[self.max_pos]
 
     def next(self):
         token = self.peek()
         self.pos += 1
+        self.max_pos = max(self.max_pos, self.pos)
         return token
 
     def accept(self, t):
