@@ -258,10 +258,9 @@ class Parser:
             result = prod.parse(ctx)
         except ParseError as e:
             error(tokenizer, e.msg, info=e.info)
-        token = tokenizer.get_max_token()
         if not result:
             error(tokenizer, 'bad parse')
-        elif token is not None:
+        elif tokenizer.peek() is not None or tokenizer.get_max_token() is not None:
             error(tokenizer, 'parser did not consume entire input')
         result, info = result
         return result
