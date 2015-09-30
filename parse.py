@@ -4,9 +4,16 @@ import sys
 from . import lex
 
 class ParseError(SyntaxError):
-    def __init__(self, msg, info=None):
+    def __init__(self, tokenizer, msg, info=None):
+        self.tokenizer = tokenizer
         self.msg = msg
         self.info = info
+    def print_and_exit(self):
+        info = self.info or self.tokenizer.peek().info
+        print('%s(%s): parse error: %s' % (info.filename, info.lineno, self.msg), file=sys.stderr)
+        print(self.tokenizer.get_current_line(), file=sys.stderr)
+        print(' ' * info.column + '^' * info.length, file=sys.stderr)
+        sys.exit(1)
 
 def merge_info_list(info):
     first = last = info
@@ -23,7 +30,7 @@ def merge_info_list(info):
                 last = i
                 break
         else:
-            return first
+            assert False
     info = copy.copy(first)
     info.length = last.length + (last.textpos - first.textpos)
     return info
@@ -31,20 +38,23 @@ def merge_info_list(info):
 # ParseResult works like a tuple for the results of parsed rules, but with an
 # additional .get_info(n) method for getting line-number information out
 class ParseResult:
-    def __init__(self, items, info):
+    def __init__(self, ctx, items, info):
+        self.ctx = ctx
         self.items = items
         self.info = info
     def __getitem__(self, n):
         return self.items[n]
-    def get_info(self, *indices, merge=True):
+    def get_info(self, *indices):
         info = self.info
         for index in indices:
             info = info[index]
-        if isinstance(info, list) and merge:
+        if isinstance(info, list):
             info = merge_info_list(info)
         return info
     def error(self, msg, *indices):
-        raise ParseError(msg, self.get_info(*indices))
+        raise ParseError(self.ctx.tokenizer, msg, self.get_info(*indices))
+    def clone(self, items=None, info=None):
+        return ParseResult(self.ctx, items or self.items, info or self.info)
 
 class Context:
     def __init__(self, fn_table, tokenizer):
@@ -142,7 +152,7 @@ class FnWrapper:
         result = self.prod.parse(ctx)
         if result:
             result, info = result
-            result = self.fn(ParseResult(result, info))
+            result = self.fn(ParseResult(ctx, result, info))
             if isinstance(result, ParseResult):
                 result, info = result.items, result.info
             else:
@@ -219,13 +229,6 @@ rule_tokens = {
 skip = {'WHITESPACE'}
 rule_lexer = lex.Lexer(rule_tokens, skip)
 
-def error(tokenizer, msg, info=None):
-    info = info or tokenizer.peek().info
-    print('%s(%s): parse error: %s' % (info.filename, info.lineno, msg), file=sys.stderr)
-    print(tokenizer.get_current_line(), file=sys.stderr)
-    print(' ' * info.column + '^' * info.length, file=sys.stderr)
-    sys.exit(1)
-
 # Decorator to add a function to a table of rules. Just because 'lambda' sucks.
 def rule_fn(rule_table, rule, prod):
     def wrapper(fn):
@@ -254,13 +257,10 @@ class Parser:
     def parse(self, tokenizer):
         prod = self.fn_table[self.start]
         ctx = Context(self.fn_table, tokenizer)
-        try:
-            result = prod.parse(ctx)
-        except ParseError as e:
-            error(tokenizer, e.msg, info=e.info)
+        result = prod.parse(ctx)
         if not result:
-            error(tokenizer, 'bad parse')
+            raise ParseError(tokenizer, 'bad parse')
         elif tokenizer.peek() is not None or tokenizer.get_max_token() is not None:
-            error(tokenizer, 'parser did not consume entire input')
+            raise ParseError(tokenizer, 'parser did not consume entire input')
         result, info = result
         return result
