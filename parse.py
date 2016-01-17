@@ -229,7 +229,9 @@ rule_tokens = {
 skip = {'WHITESPACE'}
 rule_lexer = lex.Lexer(rule_tokens, skip)
 
-# Decorator to add a function to a table of rules. Just because 'lambda' sucks.
+# Decorator to add a function to a table of rules. We can't use lambda for
+# multi-statement functions, and thus have all the functions directly inside a
+# list, but this at least allows us to have the rule right by the function definition.
 def rule_fn(rule_table, rule, prod):
     def wrapper(fn):
         rule_table.append((rule, (prod, fn)))

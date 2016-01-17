@@ -81,10 +81,6 @@ class LexerContext:
     def get_current_line(self):
         return self.get_source_line(self.peek().info)
 
-    def set_pos(self, pos):
-        self.pos = pos
-        self.max_pos = max(self.max_pos, pos)
-
     def token_at(self, pos):
         if pos >= len(self.tokens):
             return None
@@ -94,7 +90,7 @@ class LexerContext:
         return self.token_at(self.pos)
 
     def get_max_token(self):
-        return self.tokens[self.max_pos]
+        return self.token_at(self.max_pos)
 
     def next(self):
         token = self.peek()
