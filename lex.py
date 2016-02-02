@@ -27,7 +27,7 @@ class Token:
         return 'Token(%s, "%s", info=%s)' % (self.type, self.value, self.info)
 
 class Lexer:
-    def __init__(self, token_list, skip=set()):
+    def __init__(self, token_list):
         self.token_fns = {}
         # If the token list is actually a dict, sort by longest regex first
         if isinstance(token_list, dict):
@@ -40,7 +40,6 @@ class Lexer:
             sorted_tokens.append([k, v])
         regex = '|'.join('(?P<%s>%s)' % (k, v) for k, v in sorted_tokens)
         self.matcher = re.compile(regex).match
-        self.skip = skip
 
     def lex_input(self, text, filename):
         match = self.matcher(text)
@@ -51,12 +50,15 @@ class Lexer:
             type = match.lastgroup
             value = match.group(type)
             start, end = match.start(), match.end()
-            if type not in self.skip:
-                token = Token(type, value)
-                if type in self.token_fns:
-                    token = self.token_fns[type](token)
+
+            token = Token(type, value)
+            if type in self.token_fns:
+                token = self.token_fns[type](token)
+            # If the token isn't skipped, set the info and add it to the tokens list
+            if token:
                 token.info = Info(filename, lineno, start, start - last_newline, end - start)
                 tokens.append(token)
+
             if '\n' in value:
                 lineno += value.count('\n')
                 last_newline = end - value.rfind('\n')

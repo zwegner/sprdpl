@@ -224,10 +224,9 @@ rule_tokens = {
     'RPAREN':     r'\)',
     'STAR':       r'\*',
     'PLUS':       r'\+',
-    'WHITESPACE': r' ',
+    'WHITESPACE': (r' ', lambda t: None),
 }
-skip = {'WHITESPACE'}
-rule_lexer = lex.Lexer(rule_tokens, skip)
+rule_lexer = lex.Lexer(rule_tokens)
 
 # Decorator to add a function to a table of rules. We can't use lambda for
 # multi-statement functions, and thus have all the functions directly inside a
