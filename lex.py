@@ -45,7 +45,6 @@ class Lexer:
         match = self.matcher(text)
         lineno = 1
         last_newline = 0
-        tokens = []
         while match is not None:
             type = match.lastgroup
             value = match.group(type)
@@ -57,13 +56,12 @@ class Lexer:
             # If the token isn't skipped, set the info and add it to the tokens list
             if token:
                 token.info = Info(filename, lineno, start, start - last_newline, end - start)
-                tokens.append(token)
+                yield token
 
             if '\n' in value:
                 lineno += value.count('\n')
                 last_newline = end - value.rfind('\n')
             match = self.matcher(text, end)
-        return tokens
 
     def input(self, text, filename=None):
         return LexerContext(text, self.lex_input(text, filename))
@@ -71,7 +69,7 @@ class Lexer:
 class LexerContext:
     def __init__(self, text, tokens):
         self.text = text
-        self.tokens = tokens
+        self.tokens = list(tokens)
         self.pos = 0
         self.max_pos = 0
 
