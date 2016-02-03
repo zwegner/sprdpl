@@ -28,6 +28,11 @@ class Token:
 
 class Lexer:
     def __init__(self, token_list):
+        self._set_token_list(token_list)
+
+    # This is used for setting the list of accepted tokens, either when the lexer
+    # is first created, or when updating them while lexing is in flight (for supporting DSLs and such)
+    def _set_token_list(self, token_list):
         self.token_fns = {}
         # If the token list is actually a dict, sort by longest regex first
         if isinstance(token_list, dict):
@@ -56,7 +61,11 @@ class Lexer:
             # If the token isn't skipped, set the info and add it to the tokens list
             if token:
                 token.info = Info(filename, lineno, start, start - last_newline, end - start)
-                yield token
+                # This is actually a coroutine--check if the consumer has provided a new
+                # set of tokens to accept.
+                new_token_list = (yield token)
+                if new_token_list:
+                    self._set_token_list(new_token_list)
 
             if '\n' in value:
                 lineno += value.count('\n')
