@@ -246,6 +246,14 @@ class Parser:
                 if isinstance(prod, tuple):
                     prod, fn = prod
                 self.create_rule(rule, prod, fn)
+        # Finalize rules: any time we see a Alternation with just one rule, simplify it
+        # to just the one rule. We keep every rule inside an alternation at the top level
+        # in case it gets repeated (meaning that giving two different productions for a
+        # rule is the same as giving them both as an alternation, like P1|P2). This just
+        # undoes that.
+        for rule, prod in self.fn_table.items():
+            if isinstance(prod, Alternation) and len(prod.items) == 1:
+                self.fn_table[rule] = prod.items[0]
         self.start = start
 
     def create_rule(self, rule, prod, fn):
