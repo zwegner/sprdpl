@@ -94,6 +94,13 @@ class LexerContext:
             return None
         return self.tokens[pos]
 
+    # Basic wrappers to save/restore state. Right now this is just an index into the token stream.
+    def get_state(self):
+        return self.pos
+
+    def restore_state(self, state):
+        self.pos = state
+
     def peek(self):
         return self.token_at(self.pos)
 

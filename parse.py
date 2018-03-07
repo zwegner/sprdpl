@@ -84,17 +84,19 @@ class Identifier:
 
 # Parse a rule repeated at least <min> number of times (used for * and + in EBNF)
 class Repeat:
-    def __init__(self, item, min=0):
+    def __init__(self, item, min_reps=0):
         self.item = item
-        self.min = min
+        self.min_reps = min_reps
     def parse(self, ctx):
         results = []
         item = self.item.parse(ctx)
+        state = ctx.tokenizer.get_state()
         while item:
             results.append(item)
             item = self.item.parse(ctx)
-        if len(results) >= self.min:
+        if len(results) >= self.min_reps:
             return unzip(results)
+        ctx.tokenizer.restore_state(state)
         return None
     def __str__(self):
         return 'rep(%s)' % self.item
@@ -105,11 +107,11 @@ class Sequence:
         self.items = items
     def parse(self, ctx):
         results = []
-        pos = ctx.tokenizer.pos
+        state = ctx.tokenizer.get_state()
         for item in self.items:
             result = item.parse(ctx)
             if not result:
-                ctx.tokenizer.pos = pos
+                ctx.tokenizer.restore_state(state)
                 return None
             results.append(result)
         return unzip(results)
@@ -170,7 +172,7 @@ def parse_repeat(tokenizer, repeated):
     if tokenizer.accept('STAR'):
         return Repeat(repeated)
     elif tokenizer.accept('PLUS'):
-        return Repeat(repeated, min=1)
+        return Repeat(repeated, min_reps=1)
     return repeated
 
 def parse_rule_atom(tokenizer):
