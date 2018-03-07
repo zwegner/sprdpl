@@ -1,6 +1,11 @@
 import copy
 import re
 
+class LexError(SyntaxError):
+    def __init__(self, msg, info=None):
+        self.msg = msg
+        self.info = info
+
 # Info means basically filename/line number, used for reporting errors
 class Info:
     def __init__(self, filename, lineno=1, textpos=0, column=0, length=0):
@@ -50,6 +55,7 @@ class Lexer:
         match = self.matcher(text)
         lineno = 1
         last_newline = 0
+        end = 0
         while match is not None:
             type = match.lastgroup
             value = match.group(type)
@@ -67,32 +73,53 @@ class Lexer:
                 if new_token_list:
                     self._set_token_list(new_token_list)
 
+            # If there's a newline in this token, bump the newline count, and save the position
+            # of the last newline (so we know what column a given character is in)
             if '\n' in value:
                 lineno += value.count('\n')
                 last_newline = end - value.rfind('\n')
             match = self.matcher(text, end)
 
+        # Check for invalid input--we didn't reach the end of the input
+        if end != len(text):
+            info = Info(filename, lineno, end, end - last_newline, 1)
+            raise LexError('tokenizing error, invalid input', info=info)
+
     def input(self, text, filename=None):
-        return LexerContext(text, self.lex_input(text, filename))
+        return LexerContext(text, self.lex_input(text, filename), filename)
 
 class LexerContext:
-    def __init__(self, text, tokens):
+    def __init__(self, text, tokens, filename):
         self.text = text
         self.tokens = list(tokens)
         self.pos = 0
+
+        # Variables to track the maximum position in the token stream we parsed to,
+        # where that is in a file, and the set of token types that could've come next
         self.max_pos = 0
         self.max_info = None
         self.max_expected_tokens = set()
 
+        self.filename = filename
+
     def get_source_line(self, info):
         start = self.text.rfind('\n', 0, info.textpos) + 1
         end = self.text.find('\n', info.textpos)
+        # Special handling for the case where the last line doesn't have a trailing newline
+        if end == -1:
+            end = None
         return self.text[start:end]
 
     def token_at(self, pos):
         if pos >= len(self.tokens):
             return None
         return self.tokens[pos]
+
+    def get_next_info(self):
+        token = self.peek()
+        if token:
+            return token.info
+        return Info(self.filename)
 
     # Basic wrappers to save/restore state. Right now this is just an index into the token stream.
     def get_state(self):

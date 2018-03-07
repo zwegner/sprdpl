@@ -8,12 +8,14 @@ class ParseError(SyntaxError):
         self.tokenizer = tokenizer
         self.msg = msg
         self.info = info
-    def print_and_exit(self):
-        info = self.info or self.tokenizer.peek().info
-        print('%s(%s): parse error: %s' % (info.filename, info.lineno, self.msg), file=sys.stderr)
-        print(self.tokenizer.get_source_line(info), file=sys.stderr)
-        print(' ' * info.column + '^' * info.length, file=sys.stderr)
-        sys.exit(1)
+    def print(self):
+        info = self.info or self.tokenizer.get_next_info()
+        source_info = '%s(%s): ' % (info.filename, info.lineno) if info.filename else ''
+        print('%sparse error: %s' % (source_info, self.msg), file=sys.stderr)
+        line = self.tokenizer.get_source_line(info)
+        if line.strip():
+            print(line, file=sys.stderr)
+            print(' ' * info.column + '^' * info.length, file=sys.stderr)
 
 def merge_info_list(info):
     first = last = info
@@ -278,12 +280,17 @@ class Parser:
     def parse(self, tokenizer):
         rule = self.rule_table[self.start]
         ctx = Context(self.rule_table, tokenizer)
-        result = rule.parse(ctx)
-        if not result:
-            raise ParseError(tokenizer, 'bad parse')
-        elif tokenizer.peek() is not None:
+        try:
+            result = rule.parse(ctx)
+        except lex.LexError as e:
+            # Kinda hacky, wrap LexErrors in ParseErrors since we don't have access to the
+            # LexerContext where they are created
+            raise ParseError(tokenizer, e.msg, e.info)
+
+        if not result or tokenizer.peek() is not None:
             message = ('bad token, expected one of the following: %s' %
                     ' '.join(tokenizer.max_expected_tokens))
             raise ParseError(tokenizer, message, info=tokenizer.max_info)
+
         result, info = result
         return result
