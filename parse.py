@@ -57,8 +57,8 @@ class ParseResult:
         return ParseResult(self.ctx, items or self.items, info or self.info)
 
 class Context:
-    def __init__(self, fn_table, tokenizer):
-        self.fn_table = fn_table
+    def __init__(self, rule_table, tokenizer):
+        self.rule_table = rule_table
         self.tokenizer = tokenizer
 
 def unzip(results):
@@ -72,8 +72,8 @@ class Identifier:
     def __init__(self, name):
         self.name = name
     def parse(self, ctx):
-        if self.name in ctx.fn_table:
-            return ctx.fn_table[self.name].parse(ctx)
+        if self.name in ctx.rule_table:
+            return ctx.rule_table[self.name].parse(ctx)
         # XXX check token name validity
         token = ctx.tokenizer.accept(self.name)
         if token:
@@ -138,18 +138,18 @@ class Optional:
     def __str__(self):
         return 'opt(%s)' % self.item
 
-# Parse a and then call a user-defined function on the result
+# Parse a rule and then call a user-defined function on the result
 class FnWrapper:
-    def __init__(self, prod, fn):
+    def __init__(self, rule, fn):
         # Make sure top-level rules are a sequence. When we pass parse results
         # to the user-defined function, it must be returned in an array, so we
         # can use the ParseResult class and have access to the parse info
-        if not isinstance(prod, Sequence):
-            prod = Sequence([prod])
-        self.prod = prod
+        if not isinstance(rule, Sequence):
+            rule = Sequence([rule])
+        self.rule = rule
         self.fn = fn
     def parse(self, ctx):
-        result = self.prod.parse(ctx)
+        result = self.rule.parse(ctx)
         if result:
             result, info = result
             result = self.fn(ParseResult(ctx, result, info))
@@ -160,7 +160,7 @@ class FnWrapper:
             return (result, info)
         return None
     def __str__(self):
-        return str(self.prod)
+        return str(self.rule)
 
 # Mini parser for our grammar specification language (basically EBNF)
 
@@ -229,44 +229,54 @@ rule_tokens = {
 rule_lexer = lex.Lexer(rule_tokens)
 
 # Decorator to add a function to a table of rules. We can't use lambda for
-# multi-statement functions, and thus have all the functions directly inside a
-# list, but this at least allows us to have the rule right by the function definition.
-def rule_fn(rule_table, rule, prod):
+# multi-statement functions, and thus we can't have all the functions directly inside a
+# list, but this at least allows us to have the rule right by the function definition,
+# without resorting to weird things like PLY's docstring handling
+def rule_fn(rule_table, name, rule):
     def wrapper(fn):
-        rule_table.append((rule, (prod, fn)))
+        rule_table.append((name, (rule, fn)))
         return fn
     return wrapper
 
 class Parser:
     def __init__(self, rule_table, start):
-        self.fn_table = {}
-        for [rule, *prods] in rule_table:
-            for prod in prods:
+        self.rule_table = {}
+        for [name, *rules] in rule_table:
+            for rule in rules:
                 fn = None
-                if isinstance(prod, tuple):
-                    prod, fn = prod
-                self.create_rule(rule, prod, fn)
-        # Finalize rules: any time we see a Alternation with just one rule, simplify it
-        # to just the one rule. We keep every rule inside an alternation at the top level
-        # in case it gets repeated (meaning that giving two different productions for a
-        # rule is the same as giving them both as an alternation, like P1|P2). This just
-        # undoes that.
-        for rule, prod in self.fn_table.items():
-            if isinstance(prod, Alternation) and len(prod.items) == 1:
-                self.fn_table[rule] = prod.items[0]
+                if isinstance(rule, tuple):
+                    rule, fn = rule
+                self.create_rule(name, rule, fn)
+        # Finalize rules: any time we see a alternation with just one rule, simplify it
+        # to just the one rule. We keep every top-level rules inside alternations in case
+        # it gets repeated, so we take that out where it's not necessary now.
+        for name, rule in self.rule_table.items():
+            if isinstance(rule, Alternation) and len(rule.items) == 1:
+                self.rule_table[name] = rule.items[0]
         self.start = start
 
-    def create_rule(self, rule, prod, fn):
-        prod = parse_rule_expr(rule_lexer.input(prod))
-        prod = FnWrapper(prod, fn) if fn else prod
-        if rule not in self.fn_table:
-            self.fn_table[rule] = Alternation([])
-        self.fn_table[rule].items.append(prod)
+    def create_rule(self, name, rule, fn):
+        # Parse the EBNF grammar specification for this rule
+        rule = parse_rule_expr(rule_lexer.input(rule))
+
+        # Wrap the rule in an FnWrapper class if the user has provided a handling function
+        rule = FnWrapper(rule, fn) if fn else rule
+
+        # Add the rule to our rule table. We store all top-level rules inside alternations, so
+        # that adding two different rules for the same name is the same as adding them both inside
+        # an alternation. For example, this:
+        #   name: rule_1
+        #   name: rule_2
+        # ...is equivalent to:
+        #   name: rule_1 | rule_2
+        if name not in self.rule_table:
+            self.rule_table[name] = Alternation([])
+        self.rule_table[name].items.append(rule)
 
     def parse(self, tokenizer):
-        prod = self.fn_table[self.start]
-        ctx = Context(self.fn_table, tokenizer)
-        result = prod.parse(ctx)
+        rule = self.rule_table[self.start]
+        ctx = Context(self.rule_table, tokenizer)
+        result = rule.parse(ctx)
         if not result:
             raise ParseError(tokenizer, 'bad parse')
         elif tokenizer.peek() is not None:
