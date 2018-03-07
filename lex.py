@@ -81,14 +81,13 @@ class LexerContext:
         self.tokens = list(tokens)
         self.pos = 0
         self.max_pos = 0
+        self.max_info = None
+        self.max_expected_tokens = set()
 
     def get_source_line(self, info):
         start = self.text.rfind('\n', 0, info.textpos) + 1
         end = self.text.find('\n', info.textpos)
         return self.text[start:end]
-
-    def get_current_line(self):
-        return self.get_source_line(self.peek().info)
 
     def token_at(self, pos):
         if pos >= len(self.tokens):
@@ -101,18 +100,30 @@ class LexerContext:
     def get_max_token(self):
         return self.token_at(self.max_pos)
 
-    def next(self):
+    def accept(self, token_type):
         token = self.peek()
-        self.pos += 1
-        self.max_pos = max(self.max_pos, self.pos)
-        return token
 
-    def accept(self, t):
-        if self.peek() and self.peek().type == t:
-            return self.next()
+        # Before we check whether this token is acceptable to the grammar, update the lexer
+        # info about the furthest we were able to parse. We maintain a set of expected tokens
+        # that could occur at this furthest point, so we can give the user a useful error message.
+        if self.pos >= self.max_pos:
+            if self.pos > self.max_pos:
+                self.max_pos = self.pos
+                self.max_info = token and token.info
+                # Minor optimzation: only reallocate the token set if it's nonempty
+                if self.max_expected_tokens:
+                    self.max_expected_tokens = set()
+            if token_type != None:
+                self.max_expected_tokens.add(token_type)
+
+        # Now check if this is the expected token type, and move forward in the token stream if so
+        if token and token.type == token_type:
+            self.pos += 1
+            return token
         return None
 
-    def expect(self, t):
-        if not self.peek() or self.peek().type != t:
+    def expect(self, token_type):
+        token = self.accept(token_type)
+        if not token:
             raise RuntimeError('got %s instead of %s' % (self.peek(), t))
-        return self.next()
+        return token

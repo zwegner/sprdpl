@@ -11,7 +11,7 @@ class ParseError(SyntaxError):
     def print_and_exit(self):
         info = self.info or self.tokenizer.peek().info
         print('%s(%s): parse error: %s' % (info.filename, info.lineno, self.msg), file=sys.stderr)
-        print(self.tokenizer.get_current_line(), file=sys.stderr)
+        print(self.tokenizer.get_source_line(info), file=sys.stderr)
         print(' ' * info.column + '^' * info.length, file=sys.stderr)
         sys.exit(1)
 
@@ -36,7 +36,7 @@ def merge_info_list(info):
     return info
 
 # ParseResult works like a tuple for the results of parsed rules, but with an
-# additional .get_info(n) method for getting line-number information out
+# additional .get_info(n...) method for getting line-number information out
 class ParseResult:
     def __init__(self, ctx, items, info):
         self.ctx = ctx
@@ -261,7 +261,9 @@ class Parser:
         result = prod.parse(ctx)
         if not result:
             raise ParseError(tokenizer, 'bad parse')
-        elif tokenizer.peek() is not None or tokenizer.get_max_token() is not None:
-            raise ParseError(tokenizer, 'parser did not consume entire input')
+        elif tokenizer.peek() is not None:
+            message = ('bad token, expected one of the following: %s' %
+                    ' '.join(tokenizer.max_expected_tokens))
+            raise ParseError(tokenizer, message, info=tokenizer.max_info)
         result, info = result
         return result
