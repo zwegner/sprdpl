@@ -89,10 +89,16 @@ class Lexer:
         return LexerContext(text, self.lex_input(text, filename), filename)
 
 class LexerContext:
-    def __init__(self, text, tokens, filename):
+    def __init__(self, text, token_stream, filename):
         self.text = text
-        self.tokens = list(tokens)
         self.pos = 0
+
+        # The token_stream argument is a generator from the lex_input() function above.
+        # We iterate through it lazily, mostly so that lexing errors aren't raised until
+        # we're actually parsing, not here in the constructor. This is kinda dumb.
+        self.token_stream = iter(token_stream)
+        self.token_iter_pos = 0
+        self.token_cache = []
 
         # Variables to track the maximum position in the token stream we parsed to,
         # where that is in a file, and the set of token types that could've come next
@@ -111,9 +117,16 @@ class LexerContext:
         return self.text[start:end]
 
     def token_at(self, pos):
-        if pos >= len(self.tokens):
+        while self.token_stream and pos >= self.token_iter_pos:
+            self.token_iter_pos += 1
+            try:
+                self.token_cache.append(next(self.token_stream))
+            except StopIteration:
+                # Simple sentinel: take away the token stream when it's been consumed
+                self.token_stream = None
+        if pos >= len(self.token_cache):
             return None
-        return self.tokens[pos]
+        return self.token_cache[pos]
 
     def get_next_info(self):
         token = self.peek()
