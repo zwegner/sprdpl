@@ -41,7 +41,8 @@ def merge_info_list(info):
 # additional .get_info(n...) method for getting line-number information out
 class ParseResult:
     def __init__(self, ctx, items, info):
-        self.ctx = ctx
+        self._ctx = ctx
+        self.user_context = ctx.user_context
         self.items = items
         self.info = info
     def __getitem__(self, n):
@@ -54,14 +55,15 @@ class ParseResult:
             info = merge_info_list(info)
         return info
     def error(self, msg, *indices):
-        raise ParseError(self.ctx.tokenizer, msg, self.get_info(*indices))
+        raise ParseError(self._ctx.tokenizer, msg, self.get_info(*indices))
     def clone(self, items=None, info=None):
-        return ParseResult(self.ctx, items or self.items, info or self.info)
+        return ParseResult(self._ctx, items or self.items, info or self.info)
 
 class Context:
-    def __init__(self, rule_table, tokenizer):
+    def __init__(self, rule_table, tokenizer, user_context=None):
         self.rule_table = rule_table
         self.tokenizer = tokenizer
+        self.user_context = user_context
 
 def unzip(results):
     return [[r[i] for r in results] for i in range(2)]
@@ -277,9 +279,9 @@ class Parser:
             self.rule_table[name] = Alternation([])
         self.rule_table[name].items.append(rule)
 
-    def parse(self, tokenizer, start=None):
+    def parse(self, tokenizer, start=None, user_context=None):
         rule = self.rule_table[start or self.start]
-        ctx = Context(self.rule_table, tokenizer)
+        ctx = Context(self.rule_table, tokenizer, user_context=user_context)
         try:
             result = rule.parse(ctx)
         except lex.LexError as e:
