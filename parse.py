@@ -279,7 +279,7 @@ class Parser:
             self.rule_table[name] = Alternation([])
         self.rule_table[name].items.append(rule)
 
-    def parse(self, tokenizer, start=None, user_context=None):
+    def parse(self, tokenizer, start=None, user_context=None, lazy=False):
         rule = self.rule_table[start or self.start]
         ctx = Context(self.rule_table, tokenizer, user_context=user_context)
         try:
@@ -289,9 +289,14 @@ class Parser:
             # LexerContext where they are created
             raise ParseError(tokenizer, e.msg, e.info)
 
+        # If we're in lazy mode, check if we didn't parse a full element but could have. If
+        # there was a parse error, we will have given up before reaching the end of the token stream.
+        if lazy and not result and tokenizer.got_to_end():
+            return None
+
         if not result or tokenizer.peek() is not None:
             message = ('bad token, expected one of the following: %s' %
-                    ' '.join(tokenizer.max_expected_tokens))
+                    ' '.join(sorted(tokenizer.max_expected_tokens)))
             raise ParseError(tokenizer, message, info=tokenizer.max_info)
 
         result, info = result

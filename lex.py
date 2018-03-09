@@ -144,8 +144,10 @@ class LexerContext:
     def peek(self):
         return self.token_at(self.pos)
 
-    def get_max_token(self):
-        return self.token_at(self.max_pos)
+    # Return whether we tried to parse past the end of the token stream. Useful for interactive
+    # parsing.
+    def got_to_end(self):
+        return self.token_stream is None and self.max_pos == len(self.token_cache)
 
     def accept(self, token_type):
         token = self.peek()
