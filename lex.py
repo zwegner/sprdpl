@@ -171,6 +171,11 @@ class LexerContext:
             return token
         return None
 
+    # Kind of a silly function, provided for backwards compatibility
+    def next(self):
+        token = self.peek()
+        return token and self.accept(token.type)
+
     def expect(self, token_type):
         token = self.accept(token_type)
         if not token:
