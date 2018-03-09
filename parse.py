@@ -277,8 +277,8 @@ class Parser:
             self.rule_table[name] = Alternation([])
         self.rule_table[name].items.append(rule)
 
-    def parse(self, tokenizer):
-        rule = self.rule_table[self.start]
+    def parse(self, tokenizer, start=None):
+        rule = self.rule_table[start or self.start]
         ctx = Context(self.rule_table, tokenizer)
         try:
             result = rule.parse(ctx)
