@@ -28,8 +28,8 @@ class Token:
         if value is not None: c.value = value
         if info is not None:  c.info = info
         return c
-    def __str__(self):
-        return 'Token(%s, "%s", info=%s)' % (self.type, self.value, self.info)
+    def __repr__(self):
+        return 'Token(%s, %r, info=%s)' % (self.type, self.value, self.info)
 
 class Lexer:
     def __init__(self, token_list):
