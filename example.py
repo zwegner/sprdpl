@@ -1,6 +1,10 @@
 # Simple calculator program written using SPRDPL
+import decimal
+
 from . import lex
 from . import parse
+
+num_type = decimal.Decimal
 
 table = {
     'PLUS':       r'\+',
@@ -8,12 +12,12 @@ table = {
     'TIMES':      r'\*',
     'DIVIDE':     r'/',
     'POWER':      r'\^',
-    'NUMBER':     (r'[0-9]+(\.[0-9]*)?|\.[0-9]+', lambda t: t.copy(value=float(t.value))),
+    'NUMBER':     (r'[0-9]+(\.[0-9]*)?|\.[0-9]+', lambda t: t.copy(value=num_type(t.value))),
     'LPAREN':     r'\(',
     'RPAREN':     r'\)',
-    'WHITESPACE': r' +',
+    'WHITESPACE': (r' +', lambda t: None),
 }
-lexer = lex.Lexer(table, skip={'WHITESPACE'})
+lexer = lex.Lexer(table)
 
 def reduce_binop(p):
     r = p[0]
@@ -42,4 +46,9 @@ while True:
         line = input('>>> ')
     except EOFError:
         break
-    print('%g' % parser.parse(lexer.input(line)))
+    try:
+        result = parser.parse(lexer.input(line, filename='<stdin>'))
+    except parse.ParseError as e:
+        e.print()
+    else:
+        print('%s' % result)
