@@ -49,7 +49,7 @@ class Lexer:
                 self.token_fns[k] = fn
             sorted_tokens.append([k, v])
         regex = '|'.join('(?P<%s>%s)' % (k, v) for k, v in sorted_tokens)
-        self.matcher = re.compile(regex).match
+        self.matcher = re.compile(regex, re.MULTILINE).match
 
     def lex_input(self, text, filename):
         match = self.matcher(text)
