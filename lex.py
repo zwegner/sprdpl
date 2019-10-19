@@ -97,7 +97,6 @@ class LexerContext:
         # We iterate through it lazily, mostly so that lexing errors aren't raised until
         # we're actually parsing, not here in the constructor. This is kinda dumb.
         self.token_stream = iter(token_stream)
-        self.token_iter_pos = 0
         self.token_cache = []
 
         # Variables to track the maximum position in the token stream we parsed to,
@@ -117,8 +116,7 @@ class LexerContext:
         return self.text[start:end]
 
     def token_at(self, pos):
-        while self.token_stream and pos >= self.token_iter_pos:
-            self.token_iter_pos += 1
+        while self.token_stream and pos >= len(self.token_cache):
             try:
                 self.token_cache.append(next(self.token_stream))
             except StopIteration:
