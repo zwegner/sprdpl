@@ -54,6 +54,8 @@ class ParseResult:
         if isinstance(info, list):
             info = merge_info_list(info)
         return info
+    def set_token_list(self, tokens):
+        self._ctx.tokenizer.set_token_list(tokens)
     def error(self, msg, *indices):
         raise ParseError(self._ctx.tokenizer, msg, self.get_info(*indices))
     def clone(self, items=None, info=None):

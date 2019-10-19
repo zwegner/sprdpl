@@ -126,6 +126,13 @@ class LexerContext:
             return None
         return self.token_cache[pos]
 
+    def set_token_list(self, tokens):
+        try:
+            self.token_cache.append(self.token_stream.send(tokens))
+        except StopIteration:
+            # Simple sentinel: take away the token stream when it's been consumed
+            self.token_stream = None
+
     def get_next_info(self):
         token = self.peek()
         if token:
