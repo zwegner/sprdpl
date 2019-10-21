@@ -291,12 +291,14 @@ class Parser:
             # LexerContext where they are created
             raise ParseError(tokenizer, e.msg, e.info)
 
+        fail = (not result or tokenizer.peek() is not None)
+
         # If we're in lazy mode, check if we didn't parse a full element but could have. If
         # there was a parse error, we will have given up before reaching the end of the token stream.
-        if lazy and not result and tokenizer.got_to_end():
+        if lazy and fail and tokenizer.got_to_end():
             return None
 
-        if not result or tokenizer.peek() is not None:
+        if fail:
             message = ('bad token, expected one of the following: %s' %
                     ' '.join(sorted(tokenizer.max_expected_tokens)))
             raise ParseError(tokenizer, message, info=tokenizer.max_info)
