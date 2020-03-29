@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 
 # Simple calculator program written using SPRDPL
+
+# Make the local package importable by futzing with weird variables.
+# Python packaging kinda sucks
+if __name__ == '__main__' and __package__ is None:
+    import sys
+    __package__ = 'sprdpl'
+    sys.path.append('%s/..' % sys.path[0])
+
 import decimal
 
 from . import lex
