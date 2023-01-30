@@ -3,7 +3,6 @@ requires = [
     "setuptools>=63.0",
     "trove-classifiers",
     "wheel",
-    "toml>=0.10.2",
 ]
 
 build-backend = "setuptools.build_meta"
