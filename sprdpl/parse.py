@@ -32,7 +32,7 @@ def merge_info_list(info):
                 last = i
                 break
         else:
-            assert False
+            raise ValueError("Should not get here")
     info = copy.copy(first)
     info.length = last.length + (last.textpos - first.textpos)
     return info
@@ -177,7 +177,7 @@ class FnWrapper:
 def parse_repeat(tokenizer, repeated):
     if tokenizer.accept('STAR'):
         return Repeat(repeated)
-    elif tokenizer.accept('PLUS'):
+    if tokenizer.accept('PLUS'):
         return Repeat(repeated, min_reps=1)
     return repeated
 
@@ -289,7 +289,7 @@ class Parser:
         except lex.LexError as e:
             # Kinda hacky, wrap LexErrors in ParseErrors since we don't have access to the
             # LexerContext where they are created
-            raise ParseError(tokenizer, e.msg, e.info)
+            raise ParseError(tokenizer) from e
 
         fail = (not result or tokenizer.peek() is not None)
 
@@ -303,5 +303,5 @@ class Parser:
                     ' '.join(sorted(tokenizer.max_expected_tokens)))
             raise ParseError(tokenizer, message, info=tokenizer.max_info)
 
-        result, info = result
+        result, _info = result
         return result

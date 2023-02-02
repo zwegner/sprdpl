@@ -18,13 +18,13 @@ class Info:
         return 'Info("%s", %s, %s, %s)' % (self.filename, self.lineno, self.column, self.length)
 
 class Token:
-    def __init__(self, type, value, info=None):
-        self.type = type
+    def __init__(self, ttype, value, info=None):
+        self.type = ttype
         self.value = value
         self.info = info
-    def copy(self, type=None, value=None, info=None):
+    def copy(self, ttype=None, value=None, info=None):
         c = copy.copy(self)
-        if type is not None:  c.type = type
+        if ttype is not None:  c.type = ttype
         if value is not None: c.value = value
         if info is not None:  c.info = info
         return c
@@ -57,13 +57,13 @@ class Lexer:
         last_newline = 0
         end = 0
         while match is not None:
-            type = match.lastgroup
-            value = match.group(type)
+            ttype = match.lastgroup
+            value = match.group(ttype)
             start, end = match.start(), match.end()
 
-            token = Token(type, value)
-            if type in self.token_fns:
-                token = self.token_fns[type](token)
+            token = Token(ttype, value)
+            if ttype in self.token_fns:
+                token = self.token_fns[ttype](token)
             # If the token isn't skipped, set the info and add it to the tokens list
             if token:
                 token.info = Info(filename, lineno, start, start - last_newline, end - start)
@@ -167,7 +167,7 @@ class LexerContext:
                 # Minor optimzation: only reallocate the token set if it's nonempty
                 if self.max_expected_tokens:
                     self.max_expected_tokens = set()
-            if token_type != None:
+            if token_type is not None:
                 self.max_expected_tokens.add(token_type)
 
         # Now check if this is the expected token type, and move forward in the token stream if so
@@ -184,5 +184,5 @@ class LexerContext:
     def expect(self, token_type):
         token = self.accept(token_type)
         if not token:
-            raise RuntimeError('got %s instead of %s' % (self.peek(), t))
+            raise RuntimeError('got %s instead of %s' % (self.peek(), token_type))
         return token
