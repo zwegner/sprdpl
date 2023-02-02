@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+
+disable=line-too-long,missing-class-docstring,too-many-arguments,too-few-public-methods,missing-function-docstring,multiple-statements,consider-using-f-string,invalid-name
